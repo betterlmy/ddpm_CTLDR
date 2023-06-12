@@ -35,7 +35,6 @@ class GaussianDiffusion(nn.Module):
             model,
             img_size,
             img_channels,
-            num_classes,
             betas,
             loss_type="l2",
             use_ema = False,
@@ -61,7 +60,7 @@ class GaussianDiffusion(nn.Module):
 
         self.img_size = img_size
         self.img_channels = img_channels
-        self.num_classes = num_classes
+
 
         if loss_type not in ["l1", "l2"]:
             raise ValueError("__init__() got unknown loss type")
@@ -96,16 +95,16 @@ class GaussianDiffusion(nn.Module):
                     self.ema.update_model_average(self.ema_model, self.model)
 
     @torch.no_grad()
-    def remove_noise(self, x, t, y):
+    def remove_noise(self, x, t):
         if self.use_ema:
-            z = self.ema_model(x, t, y)
+            z = self.ema_model(x, t)
             return (
                     (x - extract(self.remove_noise_coeff, t, x.shape) * z) *
                     extract(self.reciprocal_sqrt_alphas, t, x.shape)
             )  
         else:
             return (
-                    (x - extract(self.remove_noise_coeff, t, x.shape) * self.model(x, t, y)) *
+                    (x - extract(self.remove_noise_coeff, t, x.shape) * self.model(x, t)) *
                     extract(self.reciprocal_sqrt_alphas, t, x.shape)
             )
             
@@ -126,17 +125,16 @@ class GaussianDiffusion(nn.Module):
     
     
     @torch.no_grad()
-    def sample(self, batch_size, device, y=None):
+    def sample(self, batch_size, device):
         """采样方法."""
-        if y is not None and batch_size != len(y):
-            raise ValueError("sample batch size different from length of given y")
+
         torch.manual_seed(self.seed)
         self.seed += 1
         x = torch.randn(batch_size, self.img_channels, *self.img_size, device=device) # 3没有添加edge
 
         for t in range(self.num_timesteps - 1, -1, -1):
             t_batch = torch.tensor([t], device=device).repeat(batch_size)
-            x = self.remove_noise(x, t_batch, y)
+            x = self.remove_noise(x, t_batch)
 
             if t > 0:
                 torch.manual_seed(self.seed)
@@ -148,10 +146,9 @@ class GaussianDiffusion(nn.Module):
 
     
     @torch.no_grad()
-    def sample_diffusion_sequence(self, batch_size, device, y=None):
+    def sample_diffusion_sequence(self, batch_size, device):
         """采样扩散序列"""
-        if y is not None and batch_size != len(y):
-            raise ValueError("sample batch size different from length of given y")
+
         torch.manual_seed(self.seed)
         self.seed += 1
         x = torch.randn(batch_size, self.img_channels, *self.img_size, device=device)
@@ -159,7 +156,7 @@ class GaussianDiffusion(nn.Module):
 
         for t in range(self.num_timesteps - 1, -1, -1):
             t_batch = torch.tensor([t], device=device).repeat(batch_size)
-            x = self.remove_noise(x, t_batch, y)
+            x = self.remove_noise(x, t_batch)
 
             if t > 0:
                 x += extract(self.sigma, t_batch, x.shape) * torch.randn_like(x)
@@ -181,7 +178,7 @@ class GaussianDiffusion(nn.Module):
                 extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape) * noise
         )
 
-    def get_losses(self, x, t, y):
+    def get_losses(self, x, t):
         # 获取损失值
         torch.manual_seed(self.seed)
         self.seed += 1
@@ -191,7 +188,7 @@ class GaussianDiffusion(nn.Module):
         perturbed_x = self.perturb_x(x, t, noise)  # 对x进行扰动
         
         # 256, 3, 32, 32 
-        estimated_noise = self.model(perturbed_x, t, y)  # 估计噪声
+        estimated_noise = self.model(perturbed_x, t)  # 估计噪声
         
         # self.sample(estimated_noise.shape[0],estimated_noise.device)
         # 256, 3, 32, 32
@@ -203,17 +200,18 @@ class GaussianDiffusion(nn.Module):
 
         return loss
 
-    def forward(self, x, y=None):
+    def forward(self, x):
         b, c, h, w = x.shape
         # print("x.shape", x.shape)
         device = x.device
         if h != self.img_size[0] or h != w:
             raise ValueError("image height does not match diffusion parameters")
+        
         torch.manual_seed(self.seed)
         self.seed += 1
         t = torch.randint(0, self.num_timesteps, (b,), device=device)  # 在[0, num_timesteps)中随机生成b个数
         
-        return self.get_losses(x, t, y)
+        return self.get_losses(x, t)
 
 
 def generate_cosine_schedule(T, s=0.008):

@@ -92,7 +92,7 @@ def get_diffusion_from_args(args):
     }
 
     model = UNet(
-        img_channels=3,
+        img_channels=1,
         base_channels=args.base_channels,
         channel_mults=args.channel_mults,
         time_emb_dim=args.time_emb_dim,
@@ -100,8 +100,6 @@ def get_diffusion_from_args(args):
         dropout=args.dropout,
         activation=activations[args.activation],
         attention_resolutions=args.attention_resolutions,
-
-        num_classes=None if not args.use_labels else 10,
         initial_pad=0,
     )
 
@@ -130,9 +128,8 @@ def get_diffusion_from_args(args):
 
     diffusion = GaussianDiffusion(
             model,
-            (32, 32),
-            3,
-            10,
+            (256, 256),
+            1,
             betas,
             use_ema=args.use_ema,
             ema_decay=args.ema_decay,

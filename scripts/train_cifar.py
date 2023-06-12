@@ -2,28 +2,24 @@ import argparse
 import datetime
 import torch
 import wandb
-# import time
 from torch.utils.data import DataLoader
 from torchvision import datasets
 import sys
 sys.path.append("../")
 sys.path.append("./")
-# sys.path.append("/root/lmy/ddpm_abarankab/")
 from ddpm import script_utils,utils
 
 
 def main():
-
     args = create_argparser().parse_args()
     device = args.device
-    utils.printArgs(args)
+    utils.initArgs(args)
+    
     try:
         diffusion = script_utils.get_diffusion_from_args(args).to(device)
         optimizer = torch.optim.Adam(diffusion.parameters(), lr=args.learning_rate)
         if args.model_checkpoint is not None:
             diffusion.load_state_dict(torch.load(args.model_checkpoint))
-        # if args.optim_checkpoint is not None:
-            # optimizer.load_state_dict(torch.load(args.optim_checkpoint))
 
         if args.log_to_wandb:
             # 记录到wandb上

@@ -10,7 +10,6 @@ from torchvision.transforms import transforms
 
 @torch.no_grad()
 def sobel(img=torch.rand((1, 1, 100, 100))):
-    
     # 定义Sobel算子的x方向和y方向kernel
     sobel_kernel_x = torch.Tensor([[1, 0, -1], [2, 0, -2], [1, 0, -1]]).unsqueeze(0).unsqueeze(0).to(img.device)
     sobel_kernel_y = torch.Tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]]).unsqueeze(0).unsqueeze(0).to(img.device)
@@ -91,7 +90,7 @@ class Downsample(nn.Module):
 
         self.downsample = nn.Conv2d(in_channels, in_channels, 3, stride=2, padding=1)
 
-    def forward(self, x, time_emb, y):
+    def forward(self, x, time_emb):
         if x.shape[2] % 2 == 1:
             raise ValueError("downsampling tensor height should be even")
         if x.shape[3] % 2 == 1:
@@ -121,7 +120,7 @@ class Upsample(nn.Module):
             nn.Conv2d(in_channels, in_channels, 3, padding=1),
         )
 
-    def forward(self, x, time_emb, y):
+    def forward(self, x, time_emb):
         return self.upsample(x)
 
 
@@ -174,12 +173,11 @@ class AttentionBlock(nn.Module):
 
 
 class ResidualBlock(nn.Module):
-    __doc__ = r"""Applies two conv blocks with resudual connection. Adds time and class conditioning by adding bias after first convolution.
+    __doc__ = r"""Applies two conv blocks with resudual connection. Adds time  conditioning by adding bias after first convolution.
 
     Input:
         x:tensor of shape (N, in_channels, H, W)
         time_emb:time embedding tensor of shape (N, time_emb_dim) or None if the block doesn't use time conditioning
-        y:classes tensor of shape (N) or None if the block doesn't use class conditioning
     Output:
         tensor of shape (N, out_channels, H, W)
     Args:
@@ -199,7 +197,6 @@ class ResidualBlock(nn.Module):
             out_channels,
             dropout,
             time_emb_dim=None,
-            num_classes=None,
             activation=F.relu,
             norm="gn",
             num_groups=32,
@@ -218,10 +215,9 @@ class ResidualBlock(nn.Module):
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
         )
 
-        # time and class conditioning
+        # time conditioning
         self.time_bias = nn.Linear(time_emb_dim, out_channels) if time_emb_dim is not None else None
         # 时间是连续的，所以用线性层 类别是离散的，所以用embedding
-        self.class_bias = nn.Embedding(num_classes, out_channels) if num_classes is not None else None
 
         self.residual_connection = nn.Conv2d(in_channels, out_channels,
                                              1) if in_channels != out_channels else nn.Identity()
@@ -229,7 +225,7 @@ class ResidualBlock(nn.Module):
         # 就是说如果in_channels == out_channels，那么就不需要residual_connection 直接返回x
         self.attention = nn.Identity() if not use_attention else AttentionBlock(out_channels, norm, num_groups)
 
-    def forward(self, x, time_emb=None, y=None):
+    def forward(self, x, time_emb=None):
         out = self.activation(self.norm_1(x))
         out = self.conv_1(out)
 
@@ -237,12 +233,6 @@ class ResidualBlock(nn.Module):
             if time_emb is None:
                 raise ValueError("time conditioning was specified but time_emb is not passed")
             out += self.time_bias(self.activation(time_emb))[:, :, None, None]
-
-        if self.class_bias is not None:
-            if y is None:
-                raise ValueError("class conditioning was specified but y is not passed")
-
-            out += self.class_bias(y)[:, :, None, None]
 
         out = self.activation(self.norm_2(out))
         out = self.conv_2(out) + self.residual_connection(x)
@@ -261,7 +251,6 @@ class UNet(nn.Module):
             num_res_blocks=2,
             time_emb_dim=None,
             time_emb_scale=1.0,
-            num_classes=None,
             activation=F.relu,
             dropout=0.1,
             attention_resolutions=(),
@@ -274,7 +263,6 @@ class UNet(nn.Module):
         self.activation = activation
         self.initial_pad = initial_pad
 
-        self.num_classes = num_classes
         self.time_mlp = nn.Sequential(
             TimeEmbedding(base_channels, time_emb_scale),
             nn.Linear(base_channels, time_emb_dim),
@@ -294,14 +282,12 @@ class UNet(nn.Module):
         for i, mult in enumerate(channel_mults):
             # mult: 1, 2, 2, 2 通道数的倍数 下采样4次
             out_channels = base_channels * mult
-
             for _ in range(num_res_blocks):
                 self.downs.append(ResidualBlock(
                     now_channels,
                     out_channels,
                     dropout,
                     time_emb_dim=time_emb_dim,
-                    num_classes=num_classes,
                     activation=activation,
                     norm=norm,
                     num_groups=num_groups,
@@ -321,7 +307,6 @@ class UNet(nn.Module):
                 now_channels,
                 dropout,
                 time_emb_dim=time_emb_dim,
-                num_classes=num_classes,
                 activation=activation,
                 norm=norm,
                 num_groups=num_groups,
@@ -332,7 +317,6 @@ class UNet(nn.Module):
                 now_channels,
                 dropout,
                 time_emb_dim=time_emb_dim,
-                num_classes=num_classes,
                 activation=activation,
                 norm=norm,
                 num_groups=num_groups,
@@ -342,21 +326,18 @@ class UNet(nn.Module):
         # UNet的上采样部分
         for i, mult in reversed(list(enumerate(channel_mults))):
             out_channels = base_channels * mult
-
             for _ in range(num_res_blocks + 1):
                 self.ups.append(ResidualBlock(
                     channels.pop() + now_channels,
                     out_channels,
                     dropout,
                     time_emb_dim=time_emb_dim,
-                    num_classes=num_classes,
                     activation=activation,
                     norm=norm,
                     num_groups=num_groups,
                     use_attention=i in attention_resolutions,
                 ))
                 now_channels = out_channels
-
             if i != 0:
                 self.ups.append(Upsample(now_channels))
 
@@ -365,7 +346,7 @@ class UNet(nn.Module):
         self.out_norm = get_norm(norm, base_channels, num_groups)
         self.out_conv = nn.Conv2d(base_channels, img_channels, 3, padding=1)
 
-    def forward(self, x, time=None, y=None):
+    def forward(self, x, time=None):
         ip = self.initial_pad
         
         # 加入边缘分支
@@ -383,24 +364,22 @@ class UNet(nn.Module):
         else:
             time_emb = None
 
-        if self.num_classes is not None and y is None:
-            raise ValueError("class conditioning was specified but y is not passed")
 
         x = self.init_conv(x)
 
         skips = [x]
 
         for layer in self.downs:
-            x = layer(x, time_emb, y)
+            x = layer(x, time_emb)
             skips.append(x)
 
         for layer in self.mid:
-            x = layer(x, time_emb, y)
+            x = layer(x, time_emb)
 
         for layer in self.ups:
             if isinstance(layer, ResidualBlock):
                 x = torch.cat([x, skips.pop()], dim=1)
-            x = layer(x, time_emb, y)
+            x = layer(x, time_emb)
 
         x = self.activation(self.out_norm(x))
         x = self.out_conv(x)

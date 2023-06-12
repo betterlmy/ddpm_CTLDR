@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-
+import os
 
 def extract(a, t, x_shape):
     b, *_ = t.shape  # *_忽略其他元素
@@ -14,7 +14,10 @@ def plot(x, y, x_name="x", y_name="y"):
     plt.ylabel(y_name)
     plt.show()
 
-def printArgs(args):
+def initArgs(args):
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+        print('文件夹创建成功!')
     for arg in vars(args):
         print(arg, getattr(args, arg))
 
