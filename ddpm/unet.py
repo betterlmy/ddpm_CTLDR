@@ -16,11 +16,11 @@ def sobel(img=torch.rand((1, 1, 100, 100))):
     
     if img.shape[1] == 3:
         r, g, b = img[:, 0], img[:, 1], img[:, 2]
-        grayscale = 0.299 * r + 0.587 * g + 0.114 * b
-        grayscale = grayscale.unsqueeze(1) # [256, 1, 32, 32]
+        img = 0.299 * r + 0.587 * g + 0.114 * b
+        img = img.unsqueeze(1) # [256, 1, 32, 32]
     # 对图像数据求Sobel梯度
-    grad_x = torch.nn.functional.conv2d(grayscale, sobel_kernel_x, padding=1) 
-    grad_y = torch.nn.functional.conv2d(grayscale, sobel_kernel_y, padding=1)
+    grad_x = torch.nn.functional.conv2d(img, sobel_kernel_x, padding=1) 
+    grad_y = torch.nn.functional.conv2d(img, sobel_kernel_y, padding=1)
 
     # 计算Sobel梯度模长
     grad = grad_x.pow(2) + grad_y.pow(2)

@@ -8,6 +8,7 @@ import sys
 sys.path.append("../")
 sys.path.append("./")
 from ddpm import script_utils,utils
+from ddpm.data import CTLDRDataset
 
 
 def main():
@@ -35,20 +36,8 @@ def main():
             wandb.watch(diffusion)
 
         batch_size = args.batch_size
-
-        train_dataset = datasets.CIFAR10(
-            root='./cifar_train',
-            train=True,
-            download=True,
-            transform=script_utils.get_transform(),
-        )
-
-        test_dataset = datasets.CIFAR10(
-            root='./cifar_test',
-            train=False,
-            download=True,
-            transform=script_utils.get_transform(),
-        )
+        train_dataset = CTLDRDataset()
+        
 
         def cycle(dl):
             """
@@ -64,7 +53,7 @@ def main():
             shuffle=False,
             drop_last=False,
         ))
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, drop_last=False)
+        test_loader = DataLoader(train_dataset, batch_size=batch_size, drop_last=False)
 
         acc_train_loss = 0
         acc_train_loss_list = []
@@ -72,14 +61,10 @@ def main():
             if args.test_mode:
                 print("iteration:", iteration)
             diffusion.train()
-            x, y = next(train_loader)
+            x = next(train_loader)
             x = x.to(device)
-            y = y.to(device)
 
-            if args.use_labels:
-                loss = diffusion(x, y)
-            else:
-                loss = diffusion(x)
+            loss = diffusion(x)
 
             acc_train_loss += loss.item()
 
@@ -146,10 +131,8 @@ def main():
 
             if iteration % args.checkpoint_rate == 0:
                 model_filename = f"{args.log_dir}/{args.project_name}-{args.run_name}-iteration-{iteration}-model.pth"
-                # optim_filename = f"{args.log_dir}/{args.project_name}-{args.run_name}-iteration-{iteration}-optim.pth"
 
                 torch.save(diffusion.state_dict(), model_filename)
-                # torch.save(optimizer.state_dict(), optim_filename)
 
         if args.log_to_wandb:
             run.finish()
@@ -163,16 +146,17 @@ def create_argparser():
     device = torch.device("cuda:3") if torch.cuda.is_available() else torch.device("cpu")
     defaults = dict(
         learning_rate=2e-4,
-        batch_size=256,  # batch_size不影响训练速度
+        batch_size=8,  # batch_size不影响训练速度
         iterations=800000,
         early_stop_loss_change =  3e-4,
-        log_to_wandb=True,
+        log_to_wandb=False,
         log_rate=100,
+        test_mode = True,
         checkpoint_rate=10000,
         # log_rate = 1,
         # checkpoint_rate = 2000,
         log_dir="./ddpm_logs",
-        project_name="ddpm-cifar10",
+        project_name="ddpm-ctldr",
         run_name=datetime.datetime.now().strftime("%m-%d-%H-%M-"),
         model_checkpoint=None,
         optim_checkpoint=None,
@@ -180,7 +164,6 @@ def create_argparser():
         schedule_low=1e-4,
         schedule_high=0.02,
         device=device,
-        test_mode = False,
     )
     defaults.update(script_utils.diffusion_defaults())  # dict
 
