@@ -17,7 +17,7 @@ def main():
     utils.initArgs(args)
     
     try:
-        diffusion = script_utils.get_diffusion_from_args(args).to(device)
+        diffusion = script_utils.get_diffusion_from_args(args,224).to(device)
         optimizer = torch.optim.Adam(diffusion.parameters(), lr=args.learning_rate)
         if args.model_checkpoint is not None:
             diffusion.load_state_dict(torch.load(args.model_checkpoint))
@@ -146,7 +146,7 @@ def create_argparser():
     device = torch.device("cuda:3") if torch.cuda.is_available() else torch.device("cpu")
     defaults = dict(
         learning_rate=2e-4,
-        batch_size=8,  # batch_size不影响训练速度
+        batch_size=3,  # batch_size不影响训练速度
         iterations=800000,
         early_stop_loss_change =  3e-4,
         log_to_wandb=False,

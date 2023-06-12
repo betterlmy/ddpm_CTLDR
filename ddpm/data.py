@@ -9,6 +9,7 @@ class CTLDRDataset(Dataset):
         assert len(self.img_paths) > 30,"数据集数量不足"
         
         self.transform = transforms.Compose([
+            transforms.Resize((224,224)),
             transforms.ToTensor(),
             transforms.Normalize((0.5),(0.5))
         ])

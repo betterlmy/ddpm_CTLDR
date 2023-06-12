@@ -81,7 +81,7 @@ def diffusion_defaults():
     return defaults
 
 
-def get_diffusion_from_args(args):
+def get_diffusion_from_args(args,size):
     """
     从参数中获取扩散模型
     """
@@ -128,7 +128,7 @@ def get_diffusion_from_args(args):
 
     diffusion = GaussianDiffusion(
             model,
-            (256, 256),
+            (size, size),
             1,
             betas,
             use_ema=args.use_ema,
