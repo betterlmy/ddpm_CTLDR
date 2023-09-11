@@ -52,7 +52,6 @@ class GaussianDiffusion(nn.Module):
             self.ema_model = deepcopy(model)
             self.ema = EMA(ema_decay)
             # EMA是指指数移动平均（Exponential Moving Average）的缩写。在这个代码中，EMA被用来对模型的权重进行平滑处理。
-            # 99.9%旧模型参数+0.1%新模型参数
             self.ema_decay = ema_decay
             self.ema_start = ema_start
             self.ema_update_rate = ema_update_rate

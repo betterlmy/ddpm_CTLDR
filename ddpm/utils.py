@@ -22,5 +22,7 @@ def initArgs(args):
         print(arg, getattr(args, arg))
 
 
+
+
 if __name__ == "__main__":
     plot([1, 2], [2, 2])
